@@ -143,7 +143,8 @@ function subInbox(){if(inbox)sb.removeChannel(inbox);const ch=sb.channel("inbox-
 document.addEventListener("visibilitychange",()=>{if(!document.hidden&&me&&inbox&&inbox.state!=="joined")subInbox()});
 function startRinging(to){stopRinging(false);const ch=sb.channel("inbox-"+to),r=ringTx={ch,to,iv:null},snd=t=>ch.send({type:"broadcast",event:"ring",payload:{t,from:me.id,name:myProf.name}});
  ch.subscribe(st=>{if(st==="SUBSCRIBED"&&ringTx===r){snd("ring");r.iv=setInterval(()=>snd("ring"),3000)}})}
-function stopRinging(cancel){if(!ringTx)return;const r=ringTx;ringTx=null;clearInterval(r.iv);if(cancel)try{r.ch.send({type:"broadcast",event:"ring",payload:{t:"cancel",from:me.id}})}catch(e){}setTimeout(()=>sb.removeChannel(r.ch),1000)}
+function dropMic(){if(!inCall&&stream){stream.getTracks().forEach(t=>t.stop());stream=null}}
+function stopRinging(cancel){if(cancel)dropMic();if(!ringTx)return;const r=ringTx;ringTx=null;clearInterval(r.iv);if(cancel)try{r.ch.send({type:"broadcast",event:"ring",payload:{t:"cancel",from:me.id}})}catch(e){}setTimeout(()=>sb.removeChannel(r.ch),1000)}
 async function onSession(ss){if(!ss){me=null;myProf=null;if(inbox){sb.removeChannel(inbox);inbox=null}showS("login");return}
  if(me&&me.id===ss.user.id)return;me=ss.user;const{data}=await sb.from("profiles").select("*").eq("id",me.id).maybeSingle();
  if(!data){showS("prof");return}myProf=data;startHome()}
@@ -191,9 +192,9 @@ async function loadFriends(){if(!me)return;const{data:fs,error}=await sb.from("f
   else fl.append(frow(p.name,sub+" · รอตอบรับ",bt("ยกเลิก","",()=>rmF(f.id))))});
  $("rqh").hidden=!rq.children.length;if(!fl.children.length)fl.append(el("p",{className:"note",textContent:"ยังไม่มีเพื่อน ค้นหาชื่อผู้ใช้ด้านบน หรือส่งลิงก์เชิญ"}))}
 setInterval(()=>{if(me&&!$("home").hidden)loadFriends()},15000);
-async function openFriend(f,call){if(room)return;const b=new TextEncoder().encode([me.id,f.id].sort().join("|")),hx=[...new Uint8Array(await crypto.subtle.digest("SHA-256",b))].map(x=>x.toString(16).padStart(2,"0")).join("").slice(0,32);
+async function openFriend(f,call){if(room)return;if(call&&!await mic()){callUI("");hmsg("ต้องอนุญาตไมโครโฟนก่อนจึงจะโทรได้ (ตั้งค่า > เบราว์เซอร์ > ไมโครโฟน)");return}const b=new TextEncoder().encode([me.id,f.id].sort().join("|")),hx=[...new Uint8Array(await crypto.subtle.digest("SHA-256",b))].map(x=>x.toString(16).padStart(2,"0")).join("").slice(0,32);
  hmsg("กำลังเชื่อมต่อ…");try{room=await joinRoom("duo-"+hx)}catch(e){console.error(e);hmsg("เชื่อมต่อไม่ได้ ลองใหม่อีกครั้ง");return}hmsg("");
- code=hx;showS("main");$("rc").textContent=f.name;room.presence({n:myProf.name});room.onPeers(render);room.onConnection(render);room.on("rtc",onRtc);render();
+ code=hx;showS("main");$("rc").textContent=f.name;room.presence({n:myProf.name,u:me.id,ts:Date.now()});room.onPeers(render);room.onConnection(render);room.on("rtc",onRtc);render();
  if(call){wantCall=true;startRinging(f.id);if(CFG.VAPID_PUBLIC)sb.functions.invoke("notify-call",{body:{to:f.id}}).catch(()=>{});callUI("กำลังเรียก "+f.name+"…");setTimeout(()=>{if(wantCall&&!inCall){wantCall=false;stopRinging(true);callUI("ไม่มีคนรับสาย")}},40000)}}
 async function onRing(p){if(!p||!me||p.from===me.id)return;
  if(p.t==="cancel"){if(ringIn&&ringIn.from===p.from){ringIn=null;$("pop").hidden=true}return}
@@ -204,7 +205,7 @@ async function onRing(p){if(!p||!me||p.from===me.id)return;
  ringIn=p;$("pop").className="ring";$("pname").textContent=String(p.name||"เพื่อน");$("pav").textContent=[...String(p.name||"?")][0];$("ptxt").textContent="กำลังโทรหาคุณ…";$("pring").hidden=false;$("pcall").hidden=true;$("wkl").hidden=true;$("ptt").hidden=true;$("pop").hidden=false;try{navigator.vibrate&&navigator.vibrate([300,150,300])}catch(e){}}
 $("copy").onclick=()=>{wantCall=false;stopRinging(true);if(inCall)endCall(true);if(sharing)$("share").click();room.leave();room=null;callUI("");showS("home");loadFriends()};
 
-const others=()=>room?room.peers().filter(p=>!p.isMe&&p.kind==="viewer"):[];
+const others=()=>{if(!room)return[];const m={};room.peers().filter(p=>!p.isMe&&p.kind==="viewer").forEach(p=>{const k=p.presence.u||p.peer;if(!m[k]||(p.presence.ts||0)>=(m[k].presence.ts||0))m[k]=p});return Object.values(m)};
 const myPeer=()=>room&&room.peers().find(p=>p.sameTab);
 function geo(a,b){const R=6371000,r=Math.PI/180,dx=(b.lng-a.lng)*r*R*Math.cos((a.lat+b.lat)/2*r),dy=(b.lat-a.lat)*r*R;return{dx,dy,d:Math.hypot(dx,dy)}}
 const fmt=d=>d<1000?Math.round(d)+" ม.":(d/1000).toFixed(1)+" กม.";
@@ -251,7 +252,7 @@ const send=(o,to)=>room.emit("rtc",{...o,to:to||callPeer}).catch(()=>{});
 const callUI=(t,ring)=>{$("callbar").hidden=!t;$("calltxt").textContent=t||"";$("ringbtns").hidden=!ring;
  const show=!!t&&(ring||inCall||wantCall),pn=String((others()[0]||{presence:{}}).presence.n||"คู่ของคุณ");$("pop").hidden=!show;
  if(show){$("pop").className=ring?"ring":"";$("pname").textContent=pn;$("pav").textContent=[...pn][0];$("ptxt").textContent=ring?"กำลังโทรหาคุณ…":t;$("pring").hidden=!ring;$("pcall").hidden=!!ring;$("wkl").hidden=!!ring||!inCall;if(ring)$("ptt").hidden=true}};
-$("acc2").onclick=()=>{if(ringIn){accT=Date.now();const f=friends.find(x=>x.id===ringIn.from);ringIn=null;$("pop").hidden=true;if(f){autoAcc=true;openFriend(f,false)}}else $("acc").click()};
+$("acc2").onclick=async()=>{if(ringIn){accT=Date.now();const f=friends.find(x=>x.id===ringIn.from);ringIn=null;$("pop").hidden=true;if(f){autoAcc=true;await mic();openFriend(f,false)}}else $("acc").click()};
 $("dec2").onclick=()=>{if(ringIn){declined[ringIn.from]=Date.now();inboxSend(ringIn.from,{t:"decline",from:me.id});ringIn=null;$("pop").hidden=true}else $("dec").click()};$("hang").onclick=()=>{if(wantCall&&!inCall){wantCall=false;stopRinging(true);callUI("")}else $("call").click()};
 let wkOn=false;
 function applyWk(){if(!stream)return;const t=stream.getAudioTracks()[0];if(t)t.enabled=!wkOn;$("ptt").hidden=!wkOn;$("mute").parentElement.hidden=wkOn}
@@ -264,7 +265,7 @@ $("mute").onclick=()=>{if(!stream)return;const t=stream.getAudioTracks()[0];if(!
 function mkPC(to){callPeer=to;const p=new RTCPeerConnection({iceServers:DUO_CONFIG.ICE});
  p.onicecandidate=e=>{if(e.candidate)send({t:"ice",c:e.candidate.toJSON()})};p.ontrack=e=>{$("ra").srcObject=e.streams[0]};
  p.onconnectionstatechange=()=>{if(p.connectionState==="connected")callUI("กำลังคุยสาย");if(p.connectionState==="failed"){callUI("เชื่อมต่อสายไม่ได้ อาจเพราะเครือข่ายบล็อก");endCall(true)}if(p.connectionState==="disconnected")setTimeout(()=>{if(pc===p&&p.connectionState!=="connected")endCall(false)},4000)};return p}
-async function mic(){try{stream=await navigator.mediaDevices.getUserMedia({audio:true});applyWk();return true}catch(e){callUI("เปิดไมโครโฟนไม่ได้ ต้องอนุญาตสิทธิ์ไมค์ หรือเปิดหน้านี้ในแท็บของตัวเอง");return false}}
+async function mic(){if(stream&&stream.active){applyWk();return true}try{stream=await navigator.mediaDevices.getUserMedia({audio:true});applyWk();return true}catch(e){callUI("เปิดไมโครโฟนไม่ได้ ต้องอนุญาตสิทธิ์ไมค์ หรือเปิดหน้านี้ในแท็บของตัวเอง");return false}}
 function endCall(notify){$("ptt").classList.remove("on");$("ptt").textContent="กดค้างเพื่อพูด";$("pop").hidden=true;$("mute").classList.remove("on");$("mute").textContent="🎙";if(notify&&callPeer)send({t:"bye"});if(pc)pc.close();pc=null;if(stream)stream.getTracks().forEach(t=>t.stop());stream=null;pend=[];incoming=null;inCall=false;$("ra").srcObject=null;setTimeout(()=>{if(!pc&&!incoming)callUI("")},2500);render()}
 $("call").onclick=async()=>{if(inCall){endCall(true);callUI("วางสายแล้ว");return}const p=others()[0];if(!p||!await mic())return;
  inCall=true;pc=mkPC(p.peer);stream.getTracks().forEach(t=>pc.addTrack(t,stream));callUI("กำลังโทรหาคู่ของคุณ…");
