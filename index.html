@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="manifest" href="manifest.json"><link rel="apple-touch-icon" href="icon-192.png"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="theme-color" content="#d83b68">
 <title>ใกล้กัน – ดูตำแหน่งและโทรคุยกับคนพิเศษ</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Prompt:wght@400;500;600&display=swap">
 <style>
@@ -65,6 +66,7 @@ a{color:var(--you)}
 </section>
 <section id="home" hidden style="overflow:auto">
   <div class="card"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><div><b id="meN"></b><div class="note" id="meU"></div></div><div class="row" style="flex:0 0 auto"><button id="invite">คัดลอกลิงก์เชิญ</button><button id="logout">ออก</button></div></div></div>
+  <div class="card"><button id="pushbtn" style="width:100%">เปิดแจ้งเตือนสายเข้า (เด้งแม้ปิดหน้าเว็บ)</button><p class="note" style="margin-top:8px">iPhone: ต้องเปิดเว็บใน Safari แล้วกดแชร์ > เพิ่มไปยังหน้าจอโฮม จากนั้นเปิดจากไอคอนนั้นแล้วกดปุ่มนี้</p></div>
   <div class="card"><label for="fu">เพิ่มเพื่อนด้วยชื่อผู้ใช้</label><div class="row"><input id="fu" placeholder="@username" autocapitalize="none" autocomplete="off"><button class="g" id="addf" style="flex:0 0 auto">ส่งคำขอ</button></div><p class="note" id="hmsg" style="margin-top:8px"></p></div>
   <div class="card" id="rqh" hidden><h3>คำขอเป็นเพื่อน</h3><div id="reqs"></div></div>
   <div class="card"><h3>เพื่อน</h3><div id="fl"></div></div>
@@ -145,11 +147,24 @@ $("signin").onclick=()=>authGo("in");$("signup").onclick=()=>authGo("up");
 $("saveprof").onclick=async()=>{const u=norm($("un").value),n=$("dn").value.trim(),pe=$("perr");if(!/^[a-z0-9_]{3,20}$/.test(u)){pe.textContent="ชื่อผู้ใช้ต้องเป็น a-z 0-9 _ ยาว 3 ถึง 20 ตัว";return}if(!n){pe.textContent="ใส่ชื่อที่เพื่อนจะเห็น";return}
  const{error}=await sb.from("profiles").insert({id:me.id,username:u,name:n});if(error){pe.textContent=error.code==="23505"?"ชื่อผู้ใช้นี้มีคนใช้แล้ว":"บันทึกไม่ได้: "+error.message;return}
  myProf={id:me.id,username:u,name:n};startHome()};
-$("logout").onclick=()=>sb.auth.signOut();
+$("logout").onclick=async()=>{try{const r=await navigator.serviceWorker.ready,x=await r.pushManager.getSubscription();if(x)await sb.from("push_subs").delete().eq("endpoint",x.endpoint)}catch(e){}sb.auth.signOut()};
+const b64u=k=>{const b=(k+"=".repeat((4-k.length%4)%4)).replace(/-/g,"+").replace(/_/g,"/");return Uint8Array.from([...atob(b)].map(c=>c.charCodeAt(0)))};
+async function enablePush(quiet){const m=t=>{if(!quiet)hmsg(t)};
+ if(!("serviceWorker" in navigator)||!("PushManager" in window)||!window.Notification){m("เบราว์เซอร์นี้ยังใช้แจ้งเตือนไม่ได้ (iPhone ต้องเพิ่มเว็บไว้ที่หน้าจอโฮมก่อน)");return}
+ if(!CFG.VAPID_PUBLIC){m("ยังไม่ได้ตั้ง VAPID_PUBLIC ใน config.js");return}
+ try{if(await Notification.requestPermission()!=="granted"){m("ไม่ได้อนุญาตแจ้งเตือน");return}
+  const reg=await navigator.serviceWorker.ready,sub=(await reg.pushManager.getSubscription())||await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:b64u(CFG.VAPID_PUBLIC)}),j=sub.toJSON();
+  const{error}=await sb.from("push_subs").upsert({user_id:me.id,endpoint:j.endpoint,sub:j},{onConflict:"endpoint"});
+  if(error){m("บันทึกแจ้งเตือนไม่ได้ ตรวจว่ารัน schema_push.sql แล้ว");return}
+  $("pushbtn").textContent="แจ้งเตือนสายเข้าเปิดอยู่ ✓";m("เปิดแจ้งเตือนสายเข้าแล้ว")}catch(e){console.error(e);m("เปิดแจ้งเตือนไม่สำเร็จ")}}
+$("pushbtn").onclick=()=>enablePush(false);
+function handleFrom(id){const f=friends.find(x=>x.id===id);if(f&&!room){autoAcc=true;openFriend(f,false)}}
+if("serviceWorker" in navigator){navigator.serviceWorker.register("sw.js").catch(()=>{});navigator.serviceWorker.addEventListener("message",e=>{if(e.data&&e.data.from&&me)handleFrom(e.data.from)})}
 $("invite").onclick=async()=>{const u=location.origin+location.pathname+"?add="+myProf.username;try{await navigator.clipboard.writeText(u);$("invite").textContent="คัดลอกแล้ว"}catch(e){prompt("คัดลอกลิงก์นี้ส่งให้เพื่อน",u)}setTimeout(()=>$("invite").textContent="คัดลอกลิงก์เชิญ",1800)};
 async function startHome(){showS("home");$("meN").textContent=myProf.name;$("meU").textContent="@"+myProf.username;
  if(!inbox){inbox=sb.channel("inbox-"+me.id).on("broadcast",{event:"ring"},({payload})=>onRing(payload)).subscribe()}
- await loadFriends();const a=new URLSearchParams(location.search).get("add");if(a){history.replaceState(null,"",location.pathname);await addFriend(norm(a))}}
+ await loadFriends();const q=new URLSearchParams(location.search),a=q.get("add"),fr=q.get("from");if(a||fr)history.replaceState(null,"",location.pathname);
+ if(a)await addFriend(norm(a));if(fr)handleFrom(fr);if(window.Notification&&Notification.permission==="granted")enablePush(true)}
 async function addFriend(u){hmsg("");if(!u)return;if(u===myProf.username){hmsg("นั่นคือชื่อของคุณเอง");return}
  const{data:p}=await sb.from("profiles").select("id,name").eq("username",u).maybeSingle();if(!p){hmsg("ไม่พบ @"+u);return}
  const{data:rv}=await sb.from("friendships").select("id,status").eq("requester",p.id).eq("addressee",me.id).maybeSingle();
@@ -171,7 +186,7 @@ setInterval(()=>{if(me&&!$("home").hidden)loadFriends()},15000);
 async function openFriend(f,call){if(room)return;const b=new TextEncoder().encode([me.id,f.id].sort().join("|")),hx=[...new Uint8Array(await crypto.subtle.digest("SHA-256",b))].map(x=>x.toString(16).padStart(2,"0")).join("").slice(0,32);
  hmsg("กำลังเชื่อมต่อ…");try{room=await joinRoom("duo-"+hx)}catch(e){console.error(e);hmsg("เชื่อมต่อไม่ได้ ลองใหม่อีกครั้ง");return}hmsg("");
  code=hx;showS("main");$("rc").textContent=f.name;room.presence({n:myProf.name});room.onPeers(render);room.onConnection(render);room.on("rtc",onRtc);render();
- if(call){wantCall=true;inboxSend(f.id,{t:"ring",from:me.id,name:myProf.name});callUI("กำลังเรียก "+f.name+"…");setTimeout(()=>{if(wantCall&&!inCall){wantCall=false;inboxSend(f.id,{t:"cancel",from:me.id});callUI("ไม่มีคนรับสาย")}},40000)}}
+ if(call){wantCall=true;inboxSend(f.id,{t:"ring",from:me.id,name:myProf.name});if(CFG.VAPID_PUBLIC)sb.functions.invoke("notify-call",{body:{to:f.id}}).catch(()=>{});callUI("กำลังเรียก "+f.name+"…");setTimeout(()=>{if(wantCall&&!inCall){wantCall=false;inboxSend(f.id,{t:"cancel",from:me.id});callUI("ไม่มีคนรับสาย")}},40000)}}
 function onRing(p){if(!p||p.from===(me&&me.id))return;if(p.t==="cancel"){if(ringIn&&ringIn.from===p.from){ringIn=null;$("pop").hidden=true}return}
  if(room||inCall||!friends.some(x=>x.id===p.from))return;ringIn=p;$("pop").className="ring";$("pname").textContent=String(p.name||"เพื่อน");$("pav").textContent=[...String(p.name||"?")][0];$("ptxt").textContent="กำลังโทรหาคุณ…";$("pring").hidden=false;$("pcall").hidden=true;$("pop").hidden=false;try{navigator.vibrate&&navigator.vibrate([300,150,300])}catch(e){}}
 $("copy").onclick=()=>{wantCall=false;if(inCall)endCall(true);if(sharing)$("share").click();room.leave();room=null;callUI("");showS("home");loadFriends()};
