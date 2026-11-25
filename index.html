@@ -42,6 +42,7 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--you);outline-of
 #pop .btns{display:flex;justify-content:center;gap:34px}
 #pop .btns div{display:flex;flex-direction:column;align-items:center;gap:6px;font-size:12px;color:var(--muted)}
 #pop .rb{width:62px;height:62px;border-radius:50%;padding:0;font-size:26px;border:0;color:#fff}
+#ptt{width:100%;padding:18px;margin-bottom:20px;font-size:17px;touch-action:none;user-select:none;-webkit-user-select:none}#ptt.on{background:var(--ok);border-color:var(--ok)}#wkl{display:block;margin:-10px 0 16px;font-size:13px;color:var(--muted)}#wkl input{width:auto;vertical-align:middle;margin-right:6px}
 .rb.ok{background:#2e9a5b}.rb.no{background:#e0364f}.rb.mu{background:var(--line);color:var(--fg)}.rb.mu.on{background:var(--fg);color:var(--bg)}
 .fr{display:flex;align-items:center;gap:8px;padding:8px 0;border-top:1px solid var(--line)}.fr .gr{flex:1;min-width:0}.fr small{display:block;color:var(--muted);font-size:12px}.fr button{padding:8px 11px;font-size:13px}.fr .av{background:var(--you)}
 h3{margin:0 0 4px;font-size:15px}
@@ -78,6 +79,7 @@ a{color:var(--you)}
   <div class="row"><button class="p" id="share">แชร์ตำแหน่งของฉัน</button><button class="g" id="call" disabled>โทรหาคู่</button></div>
   <p class="note" id="warn"></p>
   <div id="pop" hidden><div class="box"><div class="av" id="pav">?</div><h2 id="pname"></h2><p id="ptxt"></p>
+  <label id="wkl" hidden><input type="checkbox" id="wk">โหมดวอล์กกี้ กดค้างเพื่อพูด ปล่อยเพื่อฟัง</label><button class="p" id="ptt" hidden>กดค้างเพื่อพูด</button>
   <div class="btns" id="pring"><div><button class="rb no" id="dec2" aria-label="ปฏิเสธ">✕</button>ปฏิเสธ</div><div><button class="rb ok" id="acc2" aria-label="รับสาย">✆</button>รับสาย</div></div>
   <div class="btns" id="pcall"><div><button class="rb mu" id="mute" aria-label="ปิดเสียงไมค์">🎙</button>ปิดไมค์</div><div><button class="rb no" id="hang" aria-label="วางสาย">✆</button>วางสาย</div></div>
 </div></div>
@@ -220,15 +222,22 @@ $("share").onclick=()=>{if(sharing){navigator.geolocation.clearWatch(watch);shar
 const send=(o,to)=>room.emit("rtc",{...o,to:to||callPeer}).catch(()=>{});
 const callUI=(t,ring)=>{$("callbar").hidden=!t;$("calltxt").textContent=t||"";$("ringbtns").hidden=!ring;
  const show=!!t&&(ring||inCall),pn=String((others()[0]||{presence:{}}).presence.n||"คู่ของคุณ");$("pop").hidden=!show;
- if(show){$("pop").className=ring?"ring":"";$("pname").textContent=pn;$("pav").textContent=[...pn][0];$("ptxt").textContent=ring?"กำลังโทรหาคุณ…":t;$("pring").hidden=!ring;$("pcall").hidden=!!ring}};
+ if(show){$("pop").className=ring?"ring":"";$("pname").textContent=pn;$("pav").textContent=[...pn][0];$("ptxt").textContent=ring?"กำลังโทรหาคุณ…":t;$("pring").hidden=!ring;$("pcall").hidden=!!ring;$("wkl").hidden=!!ring;if(ring)$("ptt").hidden=true}};
 $("acc2").onclick=()=>{if(ringIn){const f=friends.find(x=>x.id===ringIn.from);ringIn=null;$("pop").hidden=true;if(f){autoAcc=true;openFriend(f,false)}}else $("acc").click()};
 $("dec2").onclick=()=>{if(ringIn){ringIn=null;$("pop").hidden=true}else $("dec").click()};$("hang").onclick=()=>$("call").click();
+let wkOn=false;
+function applyWk(){if(!stream)return;const t=stream.getAudioTracks()[0];if(t)t.enabled=!wkOn;$("ptt").hidden=!wkOn;$("mute").parentElement.hidden=wkOn}
+function talk(on){if(!stream||!wkOn)return;const t=stream.getAudioTracks()[0];if(t)t.enabled=on;$("ptt").classList.toggle("on",on);$("ptt").textContent=on?"กำลังพูด… ปล่อยเพื่อฟัง":"กดค้างเพื่อพูด";if(inCall)send({t:"talk",on});if(on)try{navigator.vibrate&&navigator.vibrate(20)}catch(e){}}
+$("wk").onchange=()=>{wkOn=$("wk").checked;applyWk()};
+$("ptt").onpointerdown=e=>{e.preventDefault();try{$("ptt").setPointerCapture(e.pointerId)}catch(x){}talk(true)};
+["pointerup","pointercancel"].forEach(v=>$("ptt")["on"+v]=()=>talk(false));
+$("ptt").oncontextmenu=e=>e.preventDefault();
 $("mute").onclick=()=>{if(!stream)return;const t=stream.getAudioTracks()[0];if(!t)return;t.enabled=!t.enabled;$("mute").classList.toggle("on",!t.enabled);$("mute").textContent=t.enabled?"🎙":"🔇"};
 function mkPC(to){callPeer=to;const p=new RTCPeerConnection({iceServers:DUO_CONFIG.ICE});
  p.onicecandidate=e=>{if(e.candidate)send({t:"ice",c:e.candidate.toJSON()})};p.ontrack=e=>{$("ra").srcObject=e.streams[0]};
  p.onconnectionstatechange=()=>{if(p.connectionState==="connected")callUI("กำลังคุยสาย");if(p.connectionState==="failed"){callUI("เชื่อมต่อสายไม่ได้ อาจเพราะเครือข่ายบล็อก");endCall(true)}if(p.connectionState==="disconnected")setTimeout(()=>{if(pc===p&&p.connectionState!=="connected")endCall(false)},4000)};return p}
-async function mic(){try{stream=await navigator.mediaDevices.getUserMedia({audio:true});return true}catch(e){callUI("เปิดไมโครโฟนไม่ได้ ต้องอนุญาตสิทธิ์ไมค์ หรือเปิดหน้านี้ในแท็บของตัวเอง");return false}}
-function endCall(notify){$("pop").hidden=true;$("mute").classList.remove("on");$("mute").textContent="🎙";if(notify&&callPeer)send({t:"bye"});if(pc)pc.close();pc=null;if(stream)stream.getTracks().forEach(t=>t.stop());stream=null;pend=[];incoming=null;inCall=false;$("ra").srcObject=null;setTimeout(()=>{if(!pc&&!incoming)callUI("")},2500);render()}
+async function mic(){try{stream=await navigator.mediaDevices.getUserMedia({audio:true});applyWk();return true}catch(e){callUI("เปิดไมโครโฟนไม่ได้ ต้องอนุญาตสิทธิ์ไมค์ หรือเปิดหน้านี้ในแท็บของตัวเอง");return false}}
+function endCall(notify){$("ptt").classList.remove("on");$("ptt").textContent="กดค้างเพื่อพูด";$("pop").hidden=true;$("mute").classList.remove("on");$("mute").textContent="🎙";if(notify&&callPeer)send({t:"bye"});if(pc)pc.close();pc=null;if(stream)stream.getTracks().forEach(t=>t.stop());stream=null;pend=[];incoming=null;inCall=false;$("ra").srcObject=null;setTimeout(()=>{if(!pc&&!incoming)callUI("")},2500);render()}
 $("call").onclick=async()=>{if(inCall){endCall(true);callUI("วางสายแล้ว");return}const p=others()[0];if(!p||!await mic())return;
  inCall=true;pc=mkPC(p.peer);stream.getTracks().forEach(t=>pc.addTrack(t,stream));callUI("กำลังโทรหาคู่ของคุณ…");
  const o=await pc.createOffer();await pc.setLocalDescription(o);send({t:"offer",sdp:pc.localDescription.toJSON()});render()};
@@ -236,6 +245,7 @@ async function onRtc(m){const d=m.data,mp=myPeer();if(m.isMe||!d||!mp||d.to!==mp
  if(d.t==="offer"){if(inCall){send({t:"bye"},m.peer);return}incoming={sdp:d.sdp,from:m.peer};callUI((m.presence&&m.presence.n||"คู่ของคุณ")+" กำลังโทรหา",true);if(autoAcc){autoAcc=false;setTimeout(()=>$("acc").click(),0)}try{navigator.vibrate&&navigator.vibrate([300,150,300])}catch(e){}}
  else if(d.t==="answer"&&pc){await pc.setRemoteDescription(d.sdp);pend.forEach(c=>pc.addIceCandidate(c).catch(()=>{}));pend=[]}
  else if(d.t==="ice"){if(pc&&pc.remoteDescription)pc.addIceCandidate(d.c).catch(()=>{});else pend.push(d.c)}
+ else if(d.t==="talk"&&inCall){const pn=String((others()[0]||{presence:{}}).presence.n||"คู่ของคุณ");$("ptxt").textContent=d.on?pn+" กำลังพูด…":"กำลังคุยสาย"}
  else if(d.t==="bye"){if(incoming&&!pc){incoming=null;callUI("สายที่ไม่ได้รับ")}else{endCall(false);callUI("คู่ของคุณวางสายแล้ว")}}}
 $("acc").onclick=async()=>{if(!incoming||!await mic())return;const i=incoming;incoming=null;inCall=true;pc=mkPC(i.from);stream.getTracks().forEach(t=>pc.addTrack(t,stream));
  await pc.setRemoteDescription(i.sdp);pend.forEach(c=>pc.addIceCandidate(c).catch(()=>{}));pend=[];const a=await pc.createAnswer();await pc.setLocalDescription(a);
