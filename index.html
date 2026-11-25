@@ -65,7 +65,7 @@ a{color:var(--you)}
   <label for="dn" style="margin-top:10px">ชื่อที่เพื่อนจะเห็น</label><input id="dn" maxlength="20" placeholder="เช่น แมว"><button class="p" id="saveprof" style="width:100%;margin-top:10px">บันทึก</button></div><p id="perr" style="color:var(--me);font-size:13px;margin:0"></p>
 </section>
 <section id="home" hidden style="overflow:auto">
-  <div class="card"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><div><b id="meN"></b><div class="note" id="meU"></div></div><div class="row" style="flex:0 0 auto"><button id="invite">คัดลอกลิงก์เชิญ</button><button id="logout">ออก</button></div></div></div>
+  <div class="card"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><div><b id="meN"></b><div class="note" id="meU"></div><div class="note" id="inbst">○ กำลังเชื่อมต่อรับสาย…</div></div><div class="row" style="flex:0 0 auto"><button id="invite">คัดลอกลิงก์เชิญ</button><button id="logout">ออก</button></div></div></div>
   <div class="card"><button id="pushbtn" style="width:100%">เปิดแจ้งเตือนสายเข้า (เด้งแม้ปิดหน้าเว็บ)</button><p class="note" style="margin-top:8px">iPhone: ต้องเปิดเว็บใน Safari แล้วกดแชร์ > เพิ่มไปยังหน้าจอโฮม จากนั้นเปิดจากไอคอนนั้นแล้วกดปุ่มนี้</p></div>
   <div class="card"><label for="fu">เพิ่มเพื่อนด้วยชื่อผู้ใช้</label><div class="row"><input id="fu" placeholder="@username" autocapitalize="none" autocomplete="off"><button class="g" id="addf" style="flex:0 0 auto">ส่งคำขอ</button></div><p class="note" id="hmsg" style="margin-top:8px"></p></div>
   <div class="card" id="rqh" hidden><h3>คำขอเป็นเพื่อน</h3><div id="reqs"></div></div>
@@ -136,6 +136,14 @@ const showS=id=>["login","prof","home","main"].forEach(x=>$(x).hidden=x!==id);
 let me=null,myProf=null,inbox=null,friends=[],wantCall=false,autoAcc=false,ringIn=null;
 const hmsg=t=>$("hmsg").textContent=t||"";
 function inboxSend(to,payload){const ch=sb.channel("inbox-"+to);ch.subscribe(st=>{if(st==="SUBSCRIBED")ch.send({type:"broadcast",event:"ring",payload}).finally(()=>setTimeout(()=>sb.removeChannel(ch),1500))})}
+let ringTx=null,accT=0;const declined={};
+function subInbox(){if(inbox)sb.removeChannel(inbox);const ch=sb.channel("inbox-"+me.id);inbox=ch;
+ ch.on("broadcast",{event:"ring"},({payload})=>onRing(payload)).subscribe(st=>{if(inbox!==ch)return;const ok=st==="SUBSCRIBED",b=$("inbst");b.textContent=ok?"● พร้อมรับสาย":"○ กำลังเชื่อมต่อรับสาย…";b.style.color=ok?"#2e9a5b":"";
+  if(["CHANNEL_ERROR","TIMED_OUT","CLOSED"].includes(st))setTimeout(()=>{if(inbox===ch&&me)subInbox()},3000)})}
+document.addEventListener("visibilitychange",()=>{if(!document.hidden&&me&&inbox&&inbox.state!=="joined")subInbox()});
+function startRinging(to){stopRinging(false);const ch=sb.channel("inbox-"+to),r=ringTx={ch,to,iv:null},snd=t=>ch.send({type:"broadcast",event:"ring",payload:{t,from:me.id,name:myProf.name}});
+ ch.subscribe(st=>{if(st==="SUBSCRIBED"&&ringTx===r){snd("ring");r.iv=setInterval(()=>snd("ring"),3000)}})}
+function stopRinging(cancel){if(!ringTx)return;const r=ringTx;ringTx=null;clearInterval(r.iv);if(cancel)try{r.ch.send({type:"broadcast",event:"ring",payload:{t:"cancel",from:me.id}})}catch(e){}setTimeout(()=>sb.removeChannel(r.ch),1000)}
 async function onSession(ss){if(!ss){me=null;myProf=null;if(inbox){sb.removeChannel(inbox);inbox=null}showS("login");return}
  if(me&&me.id===ss.user.id)return;me=ss.user;const{data}=await sb.from("profiles").select("*").eq("id",me.id).maybeSingle();
  if(!data){showS("prof");return}myProf=data;startHome()}
@@ -162,7 +170,7 @@ function handleFrom(id){const f=friends.find(x=>x.id===id);if(f&&!room){autoAcc=
 if("serviceWorker" in navigator){navigator.serviceWorker.register("sw.js").catch(()=>{});navigator.serviceWorker.addEventListener("message",e=>{if(e.data&&e.data.from&&me)handleFrom(e.data.from)})}
 $("invite").onclick=async()=>{const u=location.origin+location.pathname+"?add="+myProf.username;try{await navigator.clipboard.writeText(u);$("invite").textContent="คัดลอกแล้ว"}catch(e){prompt("คัดลอกลิงก์นี้ส่งให้เพื่อน",u)}setTimeout(()=>$("invite").textContent="คัดลอกลิงก์เชิญ",1800)};
 async function startHome(){showS("home");$("meN").textContent=myProf.name;$("meU").textContent="@"+myProf.username;
- if(!inbox){inbox=sb.channel("inbox-"+me.id).on("broadcast",{event:"ring"},({payload})=>onRing(payload)).subscribe()}
+ if(!inbox)subInbox();
  await loadFriends();const q=new URLSearchParams(location.search),a=q.get("add"),fr=q.get("from");if(a||fr)history.replaceState(null,"",location.pathname);
  if(a)await addFriend(norm(a));if(fr)handleFrom(fr);if(window.Notification&&Notification.permission==="granted")enablePush(true)}
 async function addFriend(u){hmsg("");if(!u)return;if(u===myProf.username){hmsg("นั่นคือชื่อของคุณเอง");return}
@@ -186,10 +194,15 @@ setInterval(()=>{if(me&&!$("home").hidden)loadFriends()},15000);
 async function openFriend(f,call){if(room)return;const b=new TextEncoder().encode([me.id,f.id].sort().join("|")),hx=[...new Uint8Array(await crypto.subtle.digest("SHA-256",b))].map(x=>x.toString(16).padStart(2,"0")).join("").slice(0,32);
  hmsg("กำลังเชื่อมต่อ…");try{room=await joinRoom("duo-"+hx)}catch(e){console.error(e);hmsg("เชื่อมต่อไม่ได้ ลองใหม่อีกครั้ง");return}hmsg("");
  code=hx;showS("main");$("rc").textContent=f.name;room.presence({n:myProf.name});room.onPeers(render);room.onConnection(render);room.on("rtc",onRtc);render();
- if(call){wantCall=true;inboxSend(f.id,{t:"ring",from:me.id,name:myProf.name});if(CFG.VAPID_PUBLIC)sb.functions.invoke("notify-call",{body:{to:f.id}}).catch(()=>{});callUI("กำลังเรียก "+f.name+"…");setTimeout(()=>{if(wantCall&&!inCall){wantCall=false;inboxSend(f.id,{t:"cancel",from:me.id});callUI("ไม่มีคนรับสาย")}},40000)}}
-function onRing(p){if(!p||p.from===(me&&me.id))return;if(p.t==="cancel"){if(ringIn&&ringIn.from===p.from){ringIn=null;$("pop").hidden=true}return}
- if(room||inCall||!friends.some(x=>x.id===p.from))return;ringIn=p;$("pop").className="ring";$("pname").textContent=String(p.name||"เพื่อน");$("pav").textContent=[...String(p.name||"?")][0];$("ptxt").textContent="กำลังโทรหาคุณ…";$("pring").hidden=false;$("pcall").hidden=true;$("pop").hidden=false;try{navigator.vibrate&&navigator.vibrate([300,150,300])}catch(e){}}
-$("copy").onclick=()=>{wantCall=false;if(inCall)endCall(true);if(sharing)$("share").click();room.leave();room=null;callUI("");showS("home");loadFriends()};
+ if(call){wantCall=true;startRinging(f.id);if(CFG.VAPID_PUBLIC)sb.functions.invoke("notify-call",{body:{to:f.id}}).catch(()=>{});callUI("กำลังเรียก "+f.name+"…");setTimeout(()=>{if(wantCall&&!inCall){wantCall=false;stopRinging(true);callUI("ไม่มีคนรับสาย")}},40000)}}
+async function onRing(p){if(!p||!me||p.from===me.id)return;
+ if(p.t==="cancel"){if(ringIn&&ringIn.from===p.from){ringIn=null;$("pop").hidden=true}return}
+ if(p.t==="decline"){if(ringTx&&ringTx.to===p.from){stopRinging(false);wantCall=false;callUI("ปลายสายไม่รับสาย");setTimeout(()=>callUI(""),2500)}return}
+ if(room||inCall||Date.now()-accT<10000||Date.now()-(declined[p.from]||0)<20000)return;
+ if(ringIn&&ringIn.from===p.from)return;
+ if(!friends.some(x=>x.id===p.from)){await loadFriends();if(!friends.some(x=>x.id===p.from))return}
+ ringIn=p;$("pop").className="ring";$("pname").textContent=String(p.name||"เพื่อน");$("pav").textContent=[...String(p.name||"?")][0];$("ptxt").textContent="กำลังโทรหาคุณ…";$("pring").hidden=false;$("pcall").hidden=true;$("wkl").hidden=true;$("ptt").hidden=true;$("pop").hidden=false;try{navigator.vibrate&&navigator.vibrate([300,150,300])}catch(e){}}
+$("copy").onclick=()=>{wantCall=false;stopRinging(true);if(inCall)endCall(true);if(sharing)$("share").click();room.leave();room=null;callUI("");showS("home");loadFriends()};
 
 const others=()=>room?room.peers().filter(p=>!p.isMe&&p.kind==="viewer"):[];
 const myPeer=()=>room&&room.peers().find(p=>p.sameTab);
@@ -208,7 +221,7 @@ function render(){if(!room)return;const o=others(),p=o[0],pr=p?p.presence:{},on=
  else{$("dist").textContent=p?"คู่ของคุณยังไม่ได้แชร์ตำแหน่ง":"รอตำแหน่ง";t=sharing?"คุณกำลังแชร์ตำแหน่งอยู่":""}
  if(has&&pr.t){const s=Math.max(0,Math.round((Date.now()-pr.t)/1000));t+=" · อัปเดต "+(s<60?s+" วินาที":Math.round(s/60)+" นาที")+"ที่แล้ว"+(s>120?" (อาจไม่เป็นปัจจุบัน)":"")}
  $("sub").textContent=t;const a=$("map");if(has&&isFinite(pr.lat)&&isFinite(pr.lng)){a.href="https://www.google.com/maps?q="+(+pr.lat).toFixed(5)+","+(+pr.lng).toFixed(5);a.hidden=false}else a.hidden=true;
- draw(has?pr:null,String(pr.n||"คู่"));if(wantCall&&p&&!inCall&&!$("call").disabled){wantCall=false;$("call").click()}}
+ draw(has?pr:null,String(pr.n||"คู่"));if(inCall&&ringTx)stopRinging(false);if(wantCall&&p&&!inCall&&!$("call").disabled){wantCall=false;stopRinging(false);$("call").click()}}
 setInterval(render,1000);addEventListener("resize",render);
 
 const fmt0=()=>$("dist").textContent.replace(/^เห็น.*|^รอ.*|^คู่.*/,"");
@@ -236,10 +249,10 @@ $("share").onclick=()=>{if(sharing){navigator.geolocation.clearWatch(watch);shar
 // โทรเสียง (WebRTC) ส่งสัญญาณผ่านห้องเรียลไทม์
 const send=(o,to)=>room.emit("rtc",{...o,to:to||callPeer}).catch(()=>{});
 const callUI=(t,ring)=>{$("callbar").hidden=!t;$("calltxt").textContent=t||"";$("ringbtns").hidden=!ring;
- const show=!!t&&(ring||inCall),pn=String((others()[0]||{presence:{}}).presence.n||"คู่ของคุณ");$("pop").hidden=!show;
- if(show){$("pop").className=ring?"ring":"";$("pname").textContent=pn;$("pav").textContent=[...pn][0];$("ptxt").textContent=ring?"กำลังโทรหาคุณ…":t;$("pring").hidden=!ring;$("pcall").hidden=!!ring;$("wkl").hidden=!!ring;if(ring)$("ptt").hidden=true}};
-$("acc2").onclick=()=>{if(ringIn){const f=friends.find(x=>x.id===ringIn.from);ringIn=null;$("pop").hidden=true;if(f){autoAcc=true;openFriend(f,false)}}else $("acc").click()};
-$("dec2").onclick=()=>{if(ringIn){ringIn=null;$("pop").hidden=true}else $("dec").click()};$("hang").onclick=()=>$("call").click();
+ const show=!!t&&(ring||inCall||wantCall),pn=String((others()[0]||{presence:{}}).presence.n||"คู่ของคุณ");$("pop").hidden=!show;
+ if(show){$("pop").className=ring?"ring":"";$("pname").textContent=pn;$("pav").textContent=[...pn][0];$("ptxt").textContent=ring?"กำลังโทรหาคุณ…":t;$("pring").hidden=!ring;$("pcall").hidden=!!ring;$("wkl").hidden=!!ring||!inCall;if(ring)$("ptt").hidden=true}};
+$("acc2").onclick=()=>{if(ringIn){accT=Date.now();const f=friends.find(x=>x.id===ringIn.from);ringIn=null;$("pop").hidden=true;if(f){autoAcc=true;openFriend(f,false)}}else $("acc").click()};
+$("dec2").onclick=()=>{if(ringIn){declined[ringIn.from]=Date.now();inboxSend(ringIn.from,{t:"decline",from:me.id});ringIn=null;$("pop").hidden=true}else $("dec").click()};$("hang").onclick=()=>{if(wantCall&&!inCall){wantCall=false;stopRinging(true);callUI("")}else $("call").click()};
 let wkOn=false;
 function applyWk(){if(!stream)return;const t=stream.getAudioTracks()[0];if(t)t.enabled=!wkOn;$("ptt").hidden=!wkOn;$("mute").parentElement.hidden=wkOn}
 function talk(on){if(!stream||!wkOn)return;const t=stream.getAudioTracks()[0];if(t)t.enabled=on;$("ptt").classList.toggle("on",on);$("ptt").textContent=on?"กำลังพูด… ปล่อยเพื่อฟัง":"กดค้างเพื่อพูด";if(inCall)send({t:"talk",on});if(on)try{navigator.vibrate&&navigator.vibrate(20)}catch(e){}}
