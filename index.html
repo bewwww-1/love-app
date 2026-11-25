@@ -29,6 +29,20 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--you);outline-of
 .row{display:flex;gap:10px}.row>*{flex:1}
 .note{font-size:12.5px;color:var(--muted);line-height:1.6;margin:0}
 #cv{width:100%;flex:1;min-height:200px;border-radius:14px;border:1px solid var(--line);background:var(--card)}
+#gm{width:100%;flex:1;min-height:240px;border-radius:14px;border:1px solid var(--line);overflow:hidden}
+.iw{display:flex;align-items:center;gap:8px;font-family:Prompt,sans-serif;color:#2a2230;padding:2px 4px}.iw small{display:block;color:#756b7c}
+.av{display:inline-flex;align-items:center;justify-content:center;border-radius:50%;color:#fff;font-weight:600;width:36px;height:36px;flex:none}
+#pop{position:fixed;inset:0;z-index:50;background:rgba(10,8,14,.72);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;padding:20px}
+#pop .box{background:var(--card);border-radius:22px;padding:28px 24px 22px;width:100%;max-width:340px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.45)}
+#pop .av{width:96px;height:96px;font-size:40px;position:relative;margin:6px auto 16px;background:var(--you)}
+#pop.ring .av::before,#pop.ring .av::after{content:"";position:absolute;inset:0;border-radius:50%;border:3px solid var(--you);animation:pul 1.6s infinite}
+#pop.ring .av::after{animation-delay:.8s}
+@keyframes pul{from{transform:scale(1);opacity:.8}to{transform:scale(1.7);opacity:0}}
+#pop h2{margin:0;font-size:22px}#pop p{margin:4px 0 22px;color:var(--muted);font-size:14px}
+#pop .btns{display:flex;justify-content:center;gap:34px}
+#pop .btns div{display:flex;flex-direction:column;align-items:center;gap:6px;font-size:12px;color:var(--muted)}
+#pop .rb{width:62px;height:62px;border-radius:50%;padding:0;font-size:26px;border:0;color:#fff}
+.rb.ok{background:#2e9a5b}.rb.no{background:#e0364f}.rb.mu{background:var(--line);color:var(--fg)}.rb.mu.on{background:var(--fg);color:var(--bg)}
 #dist{font-size:20px;font-weight:600;margin:0}#sub{margin:2px 0 0;font-size:13px;color:var(--muted)}
 #bar{display:flex;align-items:center;gap:10px;justify-content:space-between}
 #err{color:var(--me);font-size:13px;margin:0}
@@ -54,12 +68,16 @@ a{color:var(--you)}
 
 <section id="main" hidden>
   <div class="card" id="bar"><div><div style="font-size:13px;color:var(--muted)">ห้อง <b id="rc"></b></div><div id="who" style="font-weight:500"></div></div><button id="copy">คัดลอกลิงก์เชิญ</button></div>
-  <canvas id="cv"></canvas>
+  <div id="gm" hidden></div><canvas id="cv"></canvas>
   <div class="card"><p id="dist">รอตำแหน่ง</p><p id="sub"></p><a id="map" href="#" target="_blank" rel="noopener noreferrer" hidden>เปิดตำแหน่งคู่ในแผนที่</a></div>
   <div class="card" id="callbar" hidden><div id="calltxt" style="margin-bottom:8px"></div><div class="row" id="ringbtns" hidden><button class="g" id="acc">รับสาย</button><button id="dec">ปฏิเสธ</button></div></div>
   <div class="row"><button class="p" id="share">แชร์ตำแหน่งของฉัน</button><button class="g" id="call" disabled>โทรหาคู่</button></div>
   <p class="note">ส่งลิงก์เชิญหรือรหัสห้อง <b id="rc2"></b> ให้คู่ของคุณ ใครมีรหัสนี้ก็เข้าห้องได้ จึงไม่ควรบอกรหัสกับคนอื่น</p><p class="note" id="warn"></p>
-  <audio id="ra" autoplay playsinline></audio>
+  <div id="pop" hidden><div class="box"><div class="av" id="pav">?</div><h2 id="pname"></h2><p id="ptxt"></p>
+  <div class="btns" id="pring"><div><button class="rb no" id="dec2" aria-label="ปฏิเสธ">✕</button>ปฏิเสธ</div><div><button class="rb ok" id="acc2" aria-label="รับสาย">✆</button>รับสาย</div></div>
+  <div class="btns" id="pcall"><div><button class="rb mu" id="mute" aria-label="ปิดเสียงไมค์">🎙</button>ปิดไมค์</div><div><button class="rb no" id="hang" aria-label="วางสาย">✆</button>วางสาย</div></div>
+</div></div>
+<audio id="ra" autoplay playsinline></audio>
 </section>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
@@ -86,6 +104,19 @@ function joinRoom(name){return new Promise((resolve,reject)=>{
   if(st==="SUBSCRIBED"){conn=true;await ch.track(my);cl.forEach(f=>f(true));sync();if(!done){done=true;resolve(room)}}
   else if(["CHANNEL_ERROR","TIMED_OUT","CLOSED"].includes(st)){conn=false;cl.forEach(f=>f(false));if(!done){done=true;reject(new Error(st))}}});
  setTimeout(()=>{if(!done){done=true;reject(new Error("timeout"))}},12000)})}
+let gmap=null,gmk={},gline=null,gN=0,gmOK=false;
+if(CFG.GOOGLE_MAPS_KEY&&!/YOUR/.test(CFG.GOOGLE_MAPS_KEY)){window.__gm=()=>{gmOK=true;render()};window.gm_authFailure=()=>{gmOK=false;$("gm").hidden=true;$("cv").hidden=false;render()};
+ const sc=document.createElement("script");sc.async=true;sc.src="https://maps.googleapis.com/maps/api/js?key="+encodeURIComponent(CFG.GOOGLE_MAPS_KEY)+"&callback=__gm&language=th";document.head.appendChild(sc)}
+function iwNode(p){const d=document.createElement("div");d.className="iw";const a=document.createElement("span");a.className="av";a.style.background=p.c;a.textContent=[...p.n][0]||"?";const t=document.createElement("div"),b=document.createElement("b");b.textContent=p.n;t.appendChild(b);if(p.sub){const m=document.createElement("small");m.textContent=p.sub;t.appendChild(m)}d.append(a,t);return d}
+function drawMap(pts){$("gm").hidden=false;$("cv").hidden=true;
+ if(!gmap)gmap=new google.maps.Map($("gm"),{center:{lat:13.75,lng:100.5},zoom:11,disableDefaultUI:true,zoomControl:true,clickableIcons:false});
+ const keep={};pts.forEach(p=>{keep[p.k]=1;const pos={lat:p.lat,lng:p.lng},ic={path:google.maps.SymbolPath.CIRCLE,scale:10,fillColor:p.c,fillOpacity:1,strokeColor:"#fff",strokeWeight:3};
+  let o=gmk[p.k];if(!o){o=gmk[p.k]={m:new google.maps.Marker({map:gmap,position:pos,icon:ic}),w:new google.maps.InfoWindow()};o.m.addListener("click",()=>o.open?(o.w.close(),o.open=false):(o.w.open(gmap,o.m),o.open=true));o.w.open(gmap,o.m);o.open=true}
+  else{o.m.setPosition(pos);o.m.setIcon(ic)}o.w.setContent(iwNode(p))});
+ Object.keys(gmk).forEach(k=>{if(!keep[k]){gmk[k].w.close();gmk[k].m.setMap(null);delete gmk[k]}});
+ if(gline){gline.setMap(null);gline=null}
+ if(pts.length===2)gline=new google.maps.Polyline({map:gmap,path:pts.map(p=>({lat:p.lat,lng:p.lng})),strokeColor:"#756b7c",strokeOpacity:.8,strokeWeight:2});
+ if(pts.length!==gN){gN=pts.length;if(pts.length===1){gmap.setCenter({lat:pts[0].lat,lng:pts[0].lng});gmap.setZoom(16)}else if(pts.length===2){const b=new google.maps.LatLngBounds();pts.forEach(p=>b.extend({lat:p.lat,lng:p.lng}));gmap.fitBounds(b,70)}}}
 const $=id=>document.getElementById(id),css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 const DIR=["เหนือ","ตะวันออกเฉียงเหนือ","ตะวันออก","ตะวันออกเฉียงใต้","ใต้","ตะวันตกเฉียงใต้","ตะวันตก","ตะวันตกเฉียงเหนือ"];
 let room,nick="",code="",watch=null,sharing=false,myPos=null,pc=null,stream=null,pend=[],incoming=null,callPeer=null,inCall=false;
@@ -123,8 +154,10 @@ function render(){if(!room)return;const o=others(),p=o[0],pr=p?p.presence:{},on=
  draw(has?pr:null,String(pr.n||"คู่"))}
 setInterval(render,1000);addEventListener("resize",render);
 
+const fmt0=()=>$("dist").textContent.replace(/^เห็น.*|^รอ.*|^คู่.*/,"");
 function draw(pr,pn){const c=$("cv"),d=devicePixelRatio||1,w=c.clientWidth,hh=c.clientHeight;c.width=w*d;c.height=hh*d;const g=c.getContext("2d");g.scale(d,d);
- const pts=[];if(myPos)pts.push({lat:myPos.lat,lng:myPos.lng,c:css("--me"),n:"ฉัน"});if(pr)pts.push({lat:pr.lat,lng:pr.lng,c:css("--you"),n:pn});
+ const pts=[];if(myPos)pts.push({lat:myPos.lat,lng:myPos.lng,c:css("--me"),n:"ฉัน",k:"me"});if(pr)pts.push({lat:pr.lat,lng:pr.lng,c:css("--you"),n:pn,k:"you",sub:fmt0()});
+ if(gmOK){drawMap(pts);return}$("cv").hidden=false;$("gm").hidden=true;
  g.font='500 13px Prompt,sans-serif';g.textAlign="center";g.fillStyle=css("--muted");
  if(!pts.length){g.fillText("ยังไม่มีตำแหน่งให้แสดง",w/2,hh/2);return}
  const lat0=pts.reduce((s,p)=>s+p.lat,0)/pts.length,lng0=pts.reduce((s,p)=>s+p.lng,0)/pts.length,k=Math.PI/180;
@@ -145,12 +178,16 @@ $("share").onclick=()=>{if(sharing){navigator.geolocation.clearWatch(watch);shar
 
 // โทรเสียง (WebRTC) ส่งสัญญาณผ่านห้องเรียลไทม์
 const send=(o,to)=>room.emit("rtc",{...o,to:to||callPeer}).catch(()=>{});
-const callUI=(t,ring)=>{$("callbar").hidden=!t;$("calltxt").textContent=t||"";$("ringbtns").hidden=!ring};
+const callUI=(t,ring)=>{$("callbar").hidden=!t;$("calltxt").textContent=t||"";$("ringbtns").hidden=!ring;
+ const show=!!t&&(ring||inCall),pn=String((others()[0]||{presence:{}}).presence.n||"คู่ของคุณ");$("pop").hidden=!show;
+ if(show){$("pop").className=ring?"ring":"";$("pname").textContent=pn;$("pav").textContent=[...pn][0];$("ptxt").textContent=ring?"กำลังโทรหาคุณ…":t;$("pring").hidden=!ring;$("pcall").hidden=!!ring}};
+$("acc2").onclick=()=>$("acc").click();$("dec2").onclick=()=>$("dec").click();$("hang").onclick=()=>$("call").click();
+$("mute").onclick=()=>{if(!stream)return;const t=stream.getAudioTracks()[0];if(!t)return;t.enabled=!t.enabled;$("mute").classList.toggle("on",!t.enabled);$("mute").textContent=t.enabled?"🎙":"🔇"};
 function mkPC(to){callPeer=to;const p=new RTCPeerConnection({iceServers:DUO_CONFIG.ICE});
  p.onicecandidate=e=>{if(e.candidate)send({t:"ice",c:e.candidate.toJSON()})};p.ontrack=e=>{$("ra").srcObject=e.streams[0]};
  p.onconnectionstatechange=()=>{if(p.connectionState==="connected")callUI("กำลังคุยสาย");if(p.connectionState==="failed"){callUI("เชื่อมต่อสายไม่ได้ อาจเพราะเครือข่ายบล็อก");endCall(true)}if(p.connectionState==="disconnected")setTimeout(()=>{if(pc===p&&p.connectionState!=="connected")endCall(false)},4000)};return p}
 async function mic(){try{stream=await navigator.mediaDevices.getUserMedia({audio:true});return true}catch(e){callUI("เปิดไมโครโฟนไม่ได้ ต้องอนุญาตสิทธิ์ไมค์ หรือเปิดหน้านี้ในแท็บของตัวเอง");return false}}
-function endCall(notify){if(notify&&callPeer)send({t:"bye"});if(pc)pc.close();pc=null;if(stream)stream.getTracks().forEach(t=>t.stop());stream=null;pend=[];incoming=null;inCall=false;$("ra").srcObject=null;setTimeout(()=>{if(!pc&&!incoming)callUI("")},2500);render()}
+function endCall(notify){$("pop").hidden=true;$("mute").classList.remove("on");$("mute").textContent="🎙";if(notify&&callPeer)send({t:"bye"});if(pc)pc.close();pc=null;if(stream)stream.getTracks().forEach(t=>t.stop());stream=null;pend=[];incoming=null;inCall=false;$("ra").srcObject=null;setTimeout(()=>{if(!pc&&!incoming)callUI("")},2500);render()}
 $("call").onclick=async()=>{if(inCall){endCall(true);callUI("วางสายแล้ว");return}const p=others()[0];if(!p||!await mic())return;
  inCall=true;pc=mkPC(p.peer);stream.getTracks().forEach(t=>pc.addTrack(t,stream));callUI("กำลังโทรหาคู่ของคุณ…");
  const o=await pc.createOffer();await pc.setLocalDescription(o);send({t:"offer",sdp:pc.localDescription.toJSON()});render()};
