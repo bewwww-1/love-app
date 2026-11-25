@@ -66,8 +66,12 @@ a{color:var(--you)}
 <script src="config.js"></script>
 <script>
 // ---- ช่องสัญญาณเรียลไทม์ผ่าน Supabase Realtime (Presence + Broadcast) ----
-const sb=supabase.createClient(DUO_CONFIG.SUPABASE_URL,DUO_CONFIG.SUPABASE_ANON_KEY);
+const CFG=window.DUO_CONFIG||{};
+const cfgBad=!CFG.SUPABASE_URL||!CFG.SUPABASE_ANON_KEY||/YOUR-PROJECT|YOUR_SUPABASE/.test(CFG.SUPABASE_URL+CFG.SUPABASE_ANON_KEY);
+let sb=null;try{if(!cfgBad&&window.supabase)sb=supabase.createClient(CFG.SUPABASE_URL,CFG.SUPABASE_ANON_KEY)}catch(e){console.error(e)}
 function joinRoom(name){return new Promise((resolve,reject)=>{
+ if(cfgBad){reject(new Error("config"));return}
+ if(!sb){reject(new Error("lib"));return}
  const key=(crypto.randomUUID?crypto.randomUUID():String(Math.random()).slice(2)),ch=sb.channel(name,{config:{presence:{key},broadcast:{self:false}}});
  let my={},peers=[],conn=false,done=false;const pl=[],cl=[],ml={};
  const sync=()=>{const st=ch.presenceState();peers=Object.entries(st).map(([k,a])=>({peer:k,by:null,isMe:k===key,sameTab:k===key,kind:"viewer",guest:false,presence:a[a.length-1]||{},updatedAt:Date.now()}));pl.forEach(f=>f({peers}))};
@@ -78,7 +82,7 @@ function joinRoom(name){return new Promise((resolve,reject)=>{
   peers:()=>peers,onPeers:f=>{pl.push(f)},onConnection:f=>{cl.push(f)},connected:()=>conn,
   on:(t,f)=>{(ml[t]=ml[t]||[]).push(f)},
   emit:(t,data)=>ch.send({type:"broadcast",event:t,payload:{from:key,data}})};
- ch.subscribe(async st=>{
+ ch.subscribe(async (st,e)=>{if(e)console.error("Realtime:",st,e);
   if(st==="SUBSCRIBED"){conn=true;await ch.track(my);cl.forEach(f=>f(true));sync();if(!done){done=true;resolve(room)}}
   else if(["CHANNEL_ERROR","TIMED_OUT","CLOSED"].includes(st)){conn=false;cl.forEach(f=>f(false));if(!done){done=true;reject(new Error(st))}}});
  setTimeout(()=>{if(!done){done=true;reject(new Error("timeout"))}},12000)})}
@@ -92,7 +96,7 @@ const err=t=>$("err").textContent=t||"";
 async function enter(c){nick=$("nick").value.trim();if(!nick){err("ใส่ชื่อก่อนนะ");return}
  if(!/^[a-z0-9]{6,12}$/.test(c)){err("รหัสห้องต้องเป็นตัวอักษรอังกฤษพิมพ์เล็กหรือตัวเลข 6 ถึง 12 ตัว");return}
  try{localStorage.setItem("duo_nick",nick)}catch(e){}
- err("กำลังเข้าห้อง…");try{room=await joinRoom("duo-"+c)}catch(e){err("เข้าห้องไม่ได้ ตรวจสอบค่าใน config.js แล้วลองใหม่");return}
+ err("กำลังเข้าห้อง…");try{room=await joinRoom("duo-"+c)}catch(e){console.error(e);err(e.message==="config"?"ยังไม่ได้ใส่ SUPABASE_URL / SUPABASE_ANON_KEY จริงใน config.js (ตอนนี้ยังเป็นค่าตัวอย่าง)":e.message==="lib"?"โหลดไลบรารี Supabase ไม่ได้ ตรวจสอบอินเทอร์เน็ตแล้วรีเฟรช":e.message==="timeout"?"เชื่อมต่อ Supabase ไม่ทันเวลา ตรวจสอบ Project URL ว่าถูกต้องและโปรเจกต์ไม่ถูก pause":"เข้าห้องไม่ได้ ตรวจสอบ URL/anon key ใน config.js และ Realtime Settings ของ Supabase (อย่าตั้งเป็น private-only) แล้วลองใหม่");return}
  code=c;location.hash=c;err("");$("setup").hidden=true;$("main").hidden=false;$("rc").textContent=c;$("rc2").textContent=c;
  room.presence({n:nick});room.onPeers(render);room.onConnection(render);room.on("rtc",onRtc);render()}
 $("join").onclick=()=>{let v=$("code").value.trim().toLowerCase();const m=v.match(/#([a-z0-9]{6,12})$/);enter(m?m[1]:v)};
