@@ -43,6 +43,8 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--you);outline-of
 #pop .btns div{display:flex;flex-direction:column;align-items:center;gap:6px;font-size:12px;color:var(--muted)}
 #pop .rb{width:62px;height:62px;border-radius:50%;padding:0;font-size:26px;border:0;color:#fff}
 .rb.ok{background:#2e9a5b}.rb.no{background:#e0364f}.rb.mu{background:var(--line);color:var(--fg)}.rb.mu.on{background:var(--fg);color:var(--bg)}
+.fr{display:flex;align-items:center;gap:8px;padding:8px 0;border-top:1px solid var(--line)}.fr .gr{flex:1;min-width:0}.fr small{display:block;color:var(--muted);font-size:12px}.fr button{padding:8px 11px;font-size:13px}.fr .av{background:var(--you)}
+h3{margin:0 0 4px;font-size:15px}
 #dist{font-size:20px;font-weight:600;margin:0}#sub{margin:2px 0 0;font-size:13px;color:var(--muted)}
 #bar{display:flex;align-items:center;gap:10px;justify-content:space-between}
 #err{color:var(--me);font-size:13px;margin:0}
@@ -52,27 +54,29 @@ a{color:var(--you)}
 <body>
 <header><h1>ใกล้กัน</h1><span class="pill" id="conn">กำลังเชื่อมต่อ</span></header>
 
-<section id="setup">
-  <div class="card">
-    <label for="nick">ชื่อที่คู่ของคุณจะเห็น</label>
-    <input id="nick" maxlength="20" placeholder="เช่น แมว" autocomplete="off">
-  </div>
-  <div class="card">
-    <label for="code">เข้าร่วมห้องของคู่คุณ ด้วยรหัสหรือลิงก์เชิญ</label>
-    <div class="row"><input id="code" maxlength="12" placeholder="รหัสห้อง" autocapitalize="none" autocomplete="off"><button class="g" id="join" style="flex:0 0 auto">เข้าห้อง</button></div>
-  </div>
-  <button class="p" id="make">สร้างห้องใหม่ แล้วส่งลิงก์ให้คู่ของคุณ</button>
-  <p class="note">ตำแหน่งจะถูกแชร์ก็ต่อเมื่อคุณกดเอง เห็นได้เฉพาะคนในห้องรหัสเดียวกันขณะที่เปิดหน้านี้อยู่ ไม่มีการบันทึกประวัติ และกดหยุดได้ทุกเมื่อ ควรใช้กับคนที่คุณยินยอมให้ดูตำแหน่งเท่านั้น</p>
-  <p id="err"></p>
+<section id="login">
+  <div class="card"><label for="em">อีเมลของคุณ</label><input id="em" type="email" autocomplete="email" placeholder="you@example.com"><button class="p" id="sendlink" style="width:100%;margin-top:10px">ส่งลิงก์ล็อกอินไปที่อีเมล</button></div>
+  <p class="note">ไม่ต้องตั้งรหัสผ่าน กดลิงก์ในอีเมลเพื่อเข้าสู่ระบบ ตำแหน่งจะถูกแชร์ก็ต่อเมื่อคุณกดเอง และเพื่อนที่คุณรับแล้วเท่านั้นที่เห็นได้</p><p id="err"></p>
+</section>
+<section id="prof" hidden>
+  <div class="card"><label for="un">ชื่อผู้ใช้ (a-z 0-9 _ 3 ถึง 20 ตัว ให้เพื่อนค้นหา)</label><input id="un" maxlength="20" autocapitalize="none" autocomplete="off" placeholder="เช่น meow_99">
+  <label for="dn" style="margin-top:10px">ชื่อที่เพื่อนจะเห็น</label><input id="dn" maxlength="20" placeholder="เช่น แมว"><button class="p" id="saveprof" style="width:100%;margin-top:10px">บันทึก</button></div><p id="perr" style="color:var(--me);font-size:13px;margin:0"></p>
+</section>
+<section id="home" hidden style="overflow:auto">
+  <div class="card"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><div><b id="meN"></b><div class="note" id="meU"></div></div><div class="row" style="flex:0 0 auto"><button id="invite">คัดลอกลิงก์เชิญ</button><button id="logout">ออก</button></div></div></div>
+  <div class="card"><label for="fu">เพิ่มเพื่อนด้วยชื่อผู้ใช้</label><div class="row"><input id="fu" placeholder="@username" autocapitalize="none" autocomplete="off"><button class="g" id="addf" style="flex:0 0 auto">ส่งคำขอ</button></div><p class="note" id="hmsg" style="margin-top:8px"></p></div>
+  <div class="card" id="rqh" hidden><h3>คำขอเป็นเพื่อน</h3><div id="reqs"></div></div>
+  <div class="card"><h3>เพื่อน</h3><div id="fl"></div></div>
+  <p class="note">เพื่อนจะได้รับสายเมื่อเปิดแอปหน้านี้อยู่เท่านั้น</p>
 </section>
 
 <section id="main" hidden>
-  <div class="card" id="bar"><div><div style="font-size:13px;color:var(--muted)">ห้อง <b id="rc"></b></div><div id="who" style="font-weight:500"></div></div><button id="copy">คัดลอกลิงก์เชิญ</button></div>
+  <div class="card" id="bar"><div><div style="font-size:13px;color:var(--muted)">คุยกับ <b id="rc"></b></div><div id="who" style="font-weight:500"></div></div><button id="copy">← กลับ</button></div>
   <div id="gm" hidden></div><canvas id="cv"></canvas>
   <div class="card"><p id="dist">รอตำแหน่ง</p><p id="sub"></p><a id="map" href="#" target="_blank" rel="noopener noreferrer" hidden>เปิดตำแหน่งคู่ในแผนที่</a></div>
   <div class="card" id="callbar" hidden><div id="calltxt" style="margin-bottom:8px"></div><div class="row" id="ringbtns" hidden><button class="g" id="acc">รับสาย</button><button id="dec">ปฏิเสธ</button></div></div>
   <div class="row"><button class="p" id="share">แชร์ตำแหน่งของฉัน</button><button class="g" id="call" disabled>โทรหาคู่</button></div>
-  <p class="note">ส่งลิงก์เชิญหรือรหัสห้อง <b id="rc2"></b> ให้คู่ของคุณ ใครมีรหัสนี้ก็เข้าห้องได้ จึงไม่ควรบอกรหัสกับคนอื่น</p><p class="note" id="warn"></p>
+  <p class="note" id="warn"></p>
   <div id="pop" hidden><div class="box"><div class="av" id="pav">?</div><h2 id="pname"></h2><p id="ptxt"></p>
   <div class="btns" id="pring"><div><button class="rb no" id="dec2" aria-label="ปฏิเสธ">✕</button>ปฏิเสธ</div><div><button class="rb ok" id="acc2" aria-label="รับสาย">✆</button>รับสาย</div></div>
   <div class="btns" id="pcall"><div><button class="rb mu" id="mute" aria-label="ปิดเสียงไมค์">🎙</button>ปิดไมค์</div><div><button class="rb no" id="hang" aria-label="วางสาย">✆</button>วางสาย</div></div>
@@ -97,7 +101,7 @@ function joinRoom(name){return new Promise((resolve,reject)=>{
  ch.on("broadcast",{event:"rtc"},({payload})=>{const p=peers.find(x=>x.peer===payload.from);(ml.rtc||[]).forEach(f=>f({isMe:false,peer:payload.from,presence:p?p.presence:{},data:payload.data}))});
  const room={
   presence:async patch=>{my={...my,...patch};Object.keys(my).forEach(k=>my[k]===null&&delete my[k]);if(conn)await ch.track(my)},
-  peers:()=>peers,onPeers:f=>{pl.push(f)},onConnection:f=>{cl.push(f)},connected:()=>conn,
+  peers:()=>peers,onPeers:f=>{pl.push(f)},onConnection:f=>{cl.push(f)},connected:()=>conn,leave:()=>{conn=false;sb.removeChannel(ch)},
   on:(t,f)=>{(ml[t]=ml[t]||[]).push(f)},
   emit:(t,data)=>ch.send({type:"broadcast",event:t,payload:{from:key,data}})};
  ch.subscribe(async (st,e)=>{if(e)console.error("Realtime:",st,e);
@@ -120,22 +124,55 @@ function drawMap(pts){$("gm").hidden=false;$("cv").hidden=true;
 const $=id=>document.getElementById(id),css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 const DIR=["เหนือ","ตะวันออกเฉียงเหนือ","ตะวันออก","ตะวันออกเฉียงใต้","ใต้","ตะวันตกเฉียงใต้","ตะวันตก","ตะวันตกเฉียงเหนือ"];
 let room,nick="",code="",watch=null,sharing=false,myPos=null,pc=null,stream=null,pend=[],incoming=null,callPeer=null,inCall=false;
-try{$("nick").value=localStorage.getItem("duo_nick")||""}catch(e){}
-const h=location.hash.slice(1);if(/^[a-z0-9]{6,12}$/.test(h))$("code").value=h;
 const err=t=>$("err").textContent=t||"";
 
-async function enter(c){nick=$("nick").value.trim();if(!nick){err("ใส่ชื่อก่อนนะ");return}
- if(!/^[a-z0-9]{6,12}$/.test(c)){err("รหัสห้องต้องเป็นตัวอักษรอังกฤษพิมพ์เล็กหรือตัวเลข 6 ถึง 12 ตัว");return}
- try{localStorage.setItem("duo_nick",nick)}catch(e){}
- err("กำลังเข้าห้อง…");try{room=await joinRoom("duo-"+c)}catch(e){console.error(e);err(e.message==="config"?"ยังไม่ได้ใส่ SUPABASE_URL / SUPABASE_ANON_KEY จริงใน config.js (ตอนนี้ยังเป็นค่าตัวอย่าง)":e.message==="lib"?"โหลดไลบรารี Supabase ไม่ได้ ตรวจสอบอินเทอร์เน็ตแล้วรีเฟรช":e.message==="timeout"?"เชื่อมต่อ Supabase ไม่ทันเวลา ตรวจสอบ Project URL ว่าถูกต้องและโปรเจกต์ไม่ถูก pause":"เข้าห้องไม่ได้ ตรวจสอบ URL/anon key ใน config.js และ Realtime Settings ของ Supabase (อย่าตั้งเป็น private-only) แล้วลองใหม่");return}
- code=c;location.hash=c;err("");$("setup").hidden=true;$("main").hidden=false;$("rc").textContent=c;$("rc2").textContent=c;
- room.presence({n:nick});room.onPeers(render);room.onConnection(render);room.on("rtc",onRtc);render()}
-$("join").onclick=()=>{let v=$("code").value.trim().toLowerCase();const m=v.match(/#([a-z0-9]{6,12})$/);enter(m?m[1]:v)};
-$("make").onclick=()=>{const a="abcdefghjkmnpqrstuvwxyz23456789",r=crypto.getRandomValues(new Uint8Array(10));enter([...r].map(x=>a[x%a.length]).join(""))};
-$("copy").onclick=async()=>{const u=location.origin+location.pathname+"#"+code;try{await navigator.clipboard.writeText(u);$("copy").textContent="คัดลอกแล้ว"}catch(e){prompt("คัดลอกลิงก์นี้ส่งให้คู่ของคุณ",u)}setTimeout(()=>$("copy").textContent="คัดลอกลิงก์เชิญ",1800)};
+const el=(t,a={},...k)=>{const e=document.createElement(t);Object.assign(e,a);e.append(...k);return e};
+const bt=(t,c,f)=>el("button",{textContent:t,className:c||"",onclick:f}),norm=u=>u.trim().replace(/^@/,"").toLowerCase();
+const showS=id=>["login","prof","home","main"].forEach(x=>$(x).hidden=x!==id);
+let me=null,myProf=null,inbox=null,friends=[],wantCall=false,autoAcc=false,ringIn=null;
+const hmsg=t=>$("hmsg").textContent=t||"";
+function inboxSend(to,payload){const ch=sb.channel("inbox-"+to);ch.subscribe(st=>{if(st==="SUBSCRIBED")ch.send({type:"broadcast",event:"ring",payload}).finally(()=>setTimeout(()=>sb.removeChannel(ch),1500))})}
+async function onSession(ss){if(!ss){me=null;myProf=null;if(inbox){sb.removeChannel(inbox);inbox=null}showS("login");return}
+ if(me&&me.id===ss.user.id)return;me=ss.user;const{data}=await sb.from("profiles").select("*").eq("id",me.id).maybeSingle();
+ if(!data){showS("prof");return}myProf=data;startHome()}
+$("sendlink").onclick=async()=>{const email=$("em").value.trim();if(!email){err("ใส่อีเมลก่อนนะ");return}if(!sb){err("ยังไม่ได้ตั้งค่า config.js");return}
+ err("กำลังส่ง…");const{error}=await sb.auth.signInWithOtp({email,options:{emailRedirectTo:location.origin+location.pathname+location.search}});err(error?"ส่งไม่สำเร็จ: "+error.message:"ส่งลิงก์แล้ว เปิดอีเมลแล้วกดลิงก์เพื่อเข้าสู่ระบบ")};
+$("saveprof").onclick=async()=>{const u=norm($("un").value),n=$("dn").value.trim(),pe=$("perr");if(!/^[a-z0-9_]{3,20}$/.test(u)){pe.textContent="ชื่อผู้ใช้ต้องเป็น a-z 0-9 _ ยาว 3 ถึง 20 ตัว";return}if(!n){pe.textContent="ใส่ชื่อที่เพื่อนจะเห็น";return}
+ const{error}=await sb.from("profiles").insert({id:me.id,username:u,name:n});if(error){pe.textContent=error.code==="23505"?"ชื่อผู้ใช้นี้มีคนใช้แล้ว":"บันทึกไม่ได้: "+error.message;return}
+ myProf={id:me.id,username:u,name:n};startHome()};
+$("logout").onclick=()=>sb.auth.signOut();
+$("invite").onclick=async()=>{const u=location.origin+location.pathname+"?add="+myProf.username;try{await navigator.clipboard.writeText(u);$("invite").textContent="คัดลอกแล้ว"}catch(e){prompt("คัดลอกลิงก์นี้ส่งให้เพื่อน",u)}setTimeout(()=>$("invite").textContent="คัดลอกลิงก์เชิญ",1800)};
+async function startHome(){showS("home");$("meN").textContent=myProf.name;$("meU").textContent="@"+myProf.username;
+ if(!inbox){inbox=sb.channel("inbox-"+me.id).on("broadcast",{event:"ring"},({payload})=>onRing(payload)).subscribe()}
+ await loadFriends();const a=new URLSearchParams(location.search).get("add");if(a){history.replaceState(null,"",location.pathname);await addFriend(norm(a))}}
+async function addFriend(u){hmsg("");if(!u)return;if(u===myProf.username){hmsg("นั่นคือชื่อของคุณเอง");return}
+ const{data:p}=await sb.from("profiles").select("id,name").eq("username",u).maybeSingle();if(!p){hmsg("ไม่พบ @"+u);return}
+ const{data:rv}=await sb.from("friendships").select("id,status").eq("requester",p.id).eq("addressee",me.id).maybeSingle();
+ if(rv){if(rv.status==="pending")await sb.from("friendships").update({status:"accepted"}).eq("id",rv.id);hmsg("เป็นเพื่อนกับ "+p.name+" แล้ว");loadFriends();return}
+ const{error}=await sb.from("friendships").insert({requester:me.id,addressee:p.id});hmsg(error?(error.code==="23505"?"ส่งคำขอไปแล้ว":"ส่งไม่ได้: "+error.message):"ส่งคำขอถึง "+p.name+" แล้ว");$("fu").value="";loadFriends()}
+$("addf").onclick=()=>addFriend(norm($("fu").value));
+const rmF=async(id,q)=>{if(q&&!confirm(q))return;await sb.from("friendships").delete().eq("id",id);loadFriends()};
+function frow(name,sub,...b){const a=el("span",{className:"av",textContent:[...name][0]||"?"});return el("div",{className:"fr"},a,el("div",{className:"gr"},el("b",{textContent:name}),el("small",{textContent:sub})),...b)}
+async function loadFriends(){if(!me)return;const{data:fs,error}=await sb.from("friendships").select("*").or("requester.eq."+me.id+",addressee.eq."+me.id);
+ if(error){hmsg("โหลดเพื่อนไม่ได้ ตรวจว่ารัน schema.sql ใน Supabase แล้ว");return}
+ const ids=[...new Set(fs.map(f=>f.requester===me.id?f.addressee:f.requester))],{data:ps}=ids.length?await sb.from("profiles").select("*").in("id",ids):{data:[]},pm=Object.fromEntries((ps||[]).map(p=>[p.id,p]));
+ friends=[];const rq=$("reqs"),fl=$("fl");rq.replaceChildren();fl.replaceChildren();
+ fs.forEach(f=>{const p=pm[f.requester===me.id?f.addressee:f.requester];if(!p)return;const sub="@"+p.username;
+  if(f.status==="accepted"){const fr={id:p.id,name:p.name};friends.push(fr);fl.append(frow(p.name,sub,bt("โทร","g",()=>openFriend(fr,true)),bt("ตำแหน่ง","",()=>openFriend(fr,false)),bt("ลบ","",()=>rmF(f.id,"ลบเพื่อนคนนี้?"))))}
+  else if(f.addressee===me.id)rq.append(frow(p.name,sub+" ขอเป็นเพื่อน",bt("รับ","g",async()=>{await sb.from("friendships").update({status:"accepted"}).eq("id",f.id);loadFriends()}),bt("ปฏิเสธ","",()=>rmF(f.id))));
+  else fl.append(frow(p.name,sub+" · รอตอบรับ",bt("ยกเลิก","",()=>rmF(f.id))))});
+ $("rqh").hidden=!rq.children.length;if(!fl.children.length)fl.append(el("p",{className:"note",textContent:"ยังไม่มีเพื่อน ค้นหาชื่อผู้ใช้ด้านบน หรือส่งลิงก์เชิญ"}))}
+setInterval(()=>{if(me&&!$("home").hidden)loadFriends()},15000);
+async function openFriend(f,call){if(room)return;const b=new TextEncoder().encode([me.id,f.id].sort().join("|")),hx=[...new Uint8Array(await crypto.subtle.digest("SHA-256",b))].map(x=>x.toString(16).padStart(2,"0")).join("").slice(0,32);
+ hmsg("กำลังเชื่อมต่อ…");try{room=await joinRoom("duo-"+hx)}catch(e){console.error(e);hmsg("เชื่อมต่อไม่ได้ ลองใหม่อีกครั้ง");return}hmsg("");
+ code=hx;showS("main");$("rc").textContent=f.name;room.presence({n:myProf.name});room.onPeers(render);room.onConnection(render);room.on("rtc",onRtc);render();
+ if(call){wantCall=true;inboxSend(f.id,{t:"ring",from:me.id,name:myProf.name});callUI("กำลังเรียก "+f.name+"…");setTimeout(()=>{if(wantCall&&!inCall){wantCall=false;inboxSend(f.id,{t:"cancel",from:me.id});callUI("ไม่มีคนรับสาย")}},40000)}}
+function onRing(p){if(!p||p.from===(me&&me.id))return;if(p.t==="cancel"){if(ringIn&&ringIn.from===p.from){ringIn=null;$("pop").hidden=true}return}
+ if(room||inCall||!friends.some(x=>x.id===p.from))return;ringIn=p;$("pop").className="ring";$("pname").textContent=String(p.name||"เพื่อน");$("pav").textContent=[...String(p.name||"?")][0];$("ptxt").textContent="กำลังโทรหาคุณ…";$("pring").hidden=false;$("pcall").hidden=true;$("pop").hidden=false;try{navigator.vibrate&&navigator.vibrate([300,150,300])}catch(e){}}
+$("copy").onclick=()=>{wantCall=false;if(inCall)endCall(true);if(sharing)$("share").click();room.leave();room=null;callUI("");showS("home");loadFriends()};
 
 const others=()=>room?room.peers().filter(p=>!p.isMe&&p.kind==="viewer"):[];
-const me=()=>room&&room.peers().find(p=>p.sameTab);
+const myPeer=()=>room&&room.peers().find(p=>p.sameTab);
 function geo(a,b){const R=6371000,r=Math.PI/180,dx=(b.lng-a.lng)*r*R*Math.cos((a.lat+b.lat)/2*r),dy=(b.lat-a.lat)*r*R;return{dx,dy,d:Math.hypot(dx,dy)}}
 const fmt=d=>d<1000?Math.round(d)+" ม.":(d/1000).toFixed(1)+" กม.";
 
@@ -151,7 +188,7 @@ function render(){if(!room)return;const o=others(),p=o[0],pr=p?p.presence:{},on=
  else{$("dist").textContent=p?"คู่ของคุณยังไม่ได้แชร์ตำแหน่ง":"รอตำแหน่ง";t=sharing?"คุณกำลังแชร์ตำแหน่งอยู่":""}
  if(has&&pr.t){const s=Math.max(0,Math.round((Date.now()-pr.t)/1000));t+=" · อัปเดต "+(s<60?s+" วินาที":Math.round(s/60)+" นาที")+"ที่แล้ว"+(s>120?" (อาจไม่เป็นปัจจุบัน)":"")}
  $("sub").textContent=t;const a=$("map");if(has&&isFinite(pr.lat)&&isFinite(pr.lng)){a.href="https://www.google.com/maps?q="+(+pr.lat).toFixed(5)+","+(+pr.lng).toFixed(5);a.hidden=false}else a.hidden=true;
- draw(has?pr:null,String(pr.n||"คู่"))}
+ draw(has?pr:null,String(pr.n||"คู่"));if(wantCall&&p&&!inCall&&!$("call").disabled){wantCall=false;$("call").click()}}
 setInterval(render,1000);addEventListener("resize",render);
 
 const fmt0=()=>$("dist").textContent.replace(/^เห็น.*|^รอ.*|^คู่.*/,"");
@@ -181,7 +218,8 @@ const send=(o,to)=>room.emit("rtc",{...o,to:to||callPeer}).catch(()=>{});
 const callUI=(t,ring)=>{$("callbar").hidden=!t;$("calltxt").textContent=t||"";$("ringbtns").hidden=!ring;
  const show=!!t&&(ring||inCall),pn=String((others()[0]||{presence:{}}).presence.n||"คู่ของคุณ");$("pop").hidden=!show;
  if(show){$("pop").className=ring?"ring":"";$("pname").textContent=pn;$("pav").textContent=[...pn][0];$("ptxt").textContent=ring?"กำลังโทรหาคุณ…":t;$("pring").hidden=!ring;$("pcall").hidden=!!ring}};
-$("acc2").onclick=()=>$("acc").click();$("dec2").onclick=()=>$("dec").click();$("hang").onclick=()=>$("call").click();
+$("acc2").onclick=()=>{if(ringIn){const f=friends.find(x=>x.id===ringIn.from);ringIn=null;$("pop").hidden=true;if(f){autoAcc=true;openFriend(f,false)}}else $("acc").click()};
+$("dec2").onclick=()=>{if(ringIn){ringIn=null;$("pop").hidden=true}else $("dec").click()};$("hang").onclick=()=>$("call").click();
 $("mute").onclick=()=>{if(!stream)return;const t=stream.getAudioTracks()[0];if(!t)return;t.enabled=!t.enabled;$("mute").classList.toggle("on",!t.enabled);$("mute").textContent=t.enabled?"🎙":"🔇"};
 function mkPC(to){callPeer=to;const p=new RTCPeerConnection({iceServers:DUO_CONFIG.ICE});
  p.onicecandidate=e=>{if(e.candidate)send({t:"ice",c:e.candidate.toJSON()})};p.ontrack=e=>{$("ra").srcObject=e.streams[0]};
@@ -191,8 +229,8 @@ function endCall(notify){$("pop").hidden=true;$("mute").classList.remove("on");$
 $("call").onclick=async()=>{if(inCall){endCall(true);callUI("วางสายแล้ว");return}const p=others()[0];if(!p||!await mic())return;
  inCall=true;pc=mkPC(p.peer);stream.getTracks().forEach(t=>pc.addTrack(t,stream));callUI("กำลังโทรหาคู่ของคุณ…");
  const o=await pc.createOffer();await pc.setLocalDescription(o);send({t:"offer",sdp:pc.localDescription.toJSON()});render()};
-async function onRtc(m){const d=m.data,mp=me();if(m.isMe||!d||!mp||d.to!==mp.peer)return;
- if(d.t==="offer"){if(inCall){send({t:"bye"},m.peer);return}incoming={sdp:d.sdp,from:m.peer};callUI((m.presence&&m.presence.n||"คู่ของคุณ")+" กำลังโทรหา",true);try{navigator.vibrate&&navigator.vibrate([300,150,300])}catch(e){}}
+async function onRtc(m){const d=m.data,mp=myPeer();if(m.isMe||!d||!mp||d.to!==mp.peer)return;
+ if(d.t==="offer"){if(inCall){send({t:"bye"},m.peer);return}incoming={sdp:d.sdp,from:m.peer};callUI((m.presence&&m.presence.n||"คู่ของคุณ")+" กำลังโทรหา",true);if(autoAcc){autoAcc=false;setTimeout(()=>$("acc").click(),0)}try{navigator.vibrate&&navigator.vibrate([300,150,300])}catch(e){}}
  else if(d.t==="answer"&&pc){await pc.setRemoteDescription(d.sdp);pend.forEach(c=>pc.addIceCandidate(c).catch(()=>{}));pend=[]}
  else if(d.t==="ice"){if(pc&&pc.remoteDescription)pc.addIceCandidate(d.c).catch(()=>{});else pend.push(d.c)}
  else if(d.t==="bye"){if(incoming&&!pc){incoming=null;callUI("สายที่ไม่ได้รับ")}else{endCall(false);callUI("คู่ของคุณวางสายแล้ว")}}}
@@ -200,6 +238,7 @@ $("acc").onclick=async()=>{if(!incoming||!await mic())return;const i=incoming;in
  await pc.setRemoteDescription(i.sdp);pend.forEach(c=>pc.addIceCandidate(c).catch(()=>{}));pend=[];const a=await pc.createAnswer();await pc.setLocalDescription(a);
  send({t:"answer",sdp:pc.localDescription.toJSON()});callUI("กำลังเชื่อมต่อสาย…");render()};
 $("dec").onclick=()=>{if(incoming)send({t:"bye"},incoming.from);incoming=null;callUI("")};
+if(cfgBad||!sb){err("ยังไม่ได้ตั้งค่า SUPABASE_URL / SUPABASE_ANON_KEY ใน config.js")}else{sb.auth.getSession().then(({data})=>onSession(data.session));sb.auth.onAuthStateChange((e,ss)=>{if(e==="SIGNED_IN"||e==="SIGNED_OUT")onSession(ss)})}
 </script>
 </body>
 </html>
