@@ -55,8 +55,8 @@ a{color:var(--you)}
 <header><h1>ใกล้กัน</h1><span class="pill" id="conn">กำลังเชื่อมต่อ</span></header>
 
 <section id="login">
-  <div class="card"><label for="em">อีเมลของคุณ</label><input id="em" type="email" autocomplete="email" placeholder="you@example.com"><button class="p" id="sendlink" style="width:100%;margin-top:10px">ส่งลิงก์ล็อกอินไปที่อีเมล</button></div>
-  <p class="note">ไม่ต้องตั้งรหัสผ่าน กดลิงก์ในอีเมลเพื่อเข้าสู่ระบบ ตำแหน่งจะถูกแชร์ก็ต่อเมื่อคุณกดเอง และเพื่อนที่คุณรับแล้วเท่านั้นที่เห็นได้</p><p id="err"></p>
+  <div class="card"><label for="em">อีเมลของคุณ</label><input id="em" type="email" autocomplete="email" placeholder="you@example.com"><label for="pw" style="margin-top:10px">รหัสผ่าน (อย่างน้อย 6 ตัว)</label><input id="pw" type="password" autocomplete="current-password" placeholder="รหัสผ่าน"><div class="row" style="margin-top:10px"><button class="p" id="signin">เข้าสู่ระบบ</button><button class="g" id="signup">สมัครสมาชิก</button></div></div>
+  <p class="note">ครั้งแรกให้กดสมัครสมาชิก ไม่ต้องยืนยันอีเมล ตำแหน่งจะถูกแชร์ก็ต่อเมื่อคุณกดเอง และเพื่อนที่คุณรับแล้วเท่านั้นที่เห็นได้</p><p id="err"></p>
 </section>
 <section id="prof" hidden>
   <div class="card"><label for="un">ชื่อผู้ใช้ (a-z 0-9 _ 3 ถึง 20 ตัว ให้เพื่อนค้นหา)</label><input id="un" maxlength="20" autocapitalize="none" autocomplete="off" placeholder="เช่น meow_99">
@@ -135,8 +135,11 @@ function inboxSend(to,payload){const ch=sb.channel("inbox-"+to);ch.subscribe(st=
 async function onSession(ss){if(!ss){me=null;myProf=null;if(inbox){sb.removeChannel(inbox);inbox=null}showS("login");return}
  if(me&&me.id===ss.user.id)return;me=ss.user;const{data}=await sb.from("profiles").select("*").eq("id",me.id).maybeSingle();
  if(!data){showS("prof");return}myProf=data;startHome()}
-$("sendlink").onclick=async()=>{const email=$("em").value.trim();if(!email){err("ใส่อีเมลก่อนนะ");return}if(!sb){err("ยังไม่ได้ตั้งค่า config.js");return}
- err("กำลังส่ง…");const{error}=await sb.auth.signInWithOtp({email,options:{emailRedirectTo:location.origin+location.pathname+location.search}});err(error?"ส่งไม่สำเร็จ: "+error.message:"ส่งลิงก์แล้ว เปิดอีเมลแล้วกดลิงก์เพื่อเข้าสู่ระบบ")};
+const authGo=async mode=>{const email=$("em").value.trim(),password=$("pw").value;if(!email||!password){err("ใส่อีเมลและรหัสผ่านก่อนนะ");return}if(password.length<6){err("รหัสผ่านต้องมีอย่างน้อย 6 ตัว");return}if(!sb){err("ยังไม่ได้ตั้งค่า config.js");return}
+ err("กำลังดำเนินการ…");const r=mode==="up"?await sb.auth.signUp({email,password}):await sb.auth.signInWithPassword({email,password});
+ if(r.error){const m=r.error.message||"";err(/already registered/i.test(m)?"อีเมลนี้สมัครแล้ว กดเข้าสู่ระบบแทน":/invalid login/i.test(m)?"อีเมลหรือรหัสผ่านไม่ถูกต้อง (ถ้ายังไม่เคยสมัคร กดสมัครสมาชิกก่อน)":/rate limit/i.test(m)?"ลองบ่อยเกินไป รอสักครู่แล้วลองใหม่":m);return}
+ if(mode==="up"&&!r.data.session){err("สมัครแล้ว แต่โปรเจกต์ยังเปิดยืนยันอีเมลอยู่ ให้ปิด Confirm email ใน Supabase แล้วกดเข้าสู่ระบบ");return}err("")};
+$("signin").onclick=()=>authGo("in");$("signup").onclick=()=>authGo("up");
 $("saveprof").onclick=async()=>{const u=norm($("un").value),n=$("dn").value.trim(),pe=$("perr");if(!/^[a-z0-9_]{3,20}$/.test(u)){pe.textContent="ชื่อผู้ใช้ต้องเป็น a-z 0-9 _ ยาว 3 ถึง 20 ตัว";return}if(!n){pe.textContent="ใส่ชื่อที่เพื่อนจะเห็น";return}
  const{error}=await sb.from("profiles").insert({id:me.id,username:u,name:n});if(error){pe.textContent=error.code==="23505"?"ชื่อผู้ใช้นี้มีคนใช้แล้ว":"บันทึกไม่ได้: "+error.message;return}
  myProf={id:me.id,username:u,name:n};startHome()};
